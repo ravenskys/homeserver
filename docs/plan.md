@@ -1,6 +1,6 @@
 # Home server build plan
 
-This document captures **goals**, **constraints**, **software principles**, and **phased first steps** so the build stays aligned with what you want and everything remains **adaptable** as you learn what works on your hardware.
+This document captures **goals**, **hardware**, **software principles**, and **phased steps** so the build stays aligned with what you want and everything remains **adaptable** as you upgrade storage and services.
 
 ---
 
@@ -8,22 +8,27 @@ This document captures **goals**, **constraints**, **software principles**, and 
 
 | Area | What you want |
 |------|----------------|
-| **Media** | Store movies/shows; watch from home and while away, without relying on a public cloud for the library. |
-| **Files** | “Cloud-like” access: save files, sync or fetch from anywhere, **you** control the data. |
-| **Photos / cameras** | Backup and browse phone/camera image libraries; prefer **self-hosted** over vendor lock-in. |
-| **Voice / AI (local)** | Smart-home style commands and local automation where possible; **realistic** about RAM (8 GB) for heavy models. |
-| **Remote access** | Reach services from outside the home **securely** (VPN or equivalent), not by exposing file shares to the open internet. |
+| **Media** | Central library of movies and videos; access from **anywhere**; start playback with a **normal client app** (and optionally **voice** through the home hub). Goal: *request and watch* with minimal friction, not a proprietary cloud. |
+| **Private documents** | **Moderate** space for private files, **cloud-like** access (sync, web, or WebDAV) **you** control, reachable safely from outside the home. |
+| **Whole-home “brain”** | This server is the **center** for home automation, replacing a scattered mix of **camera** apps and **voice** / AI command interfaces with **one** stack you can customize. |
+| **IP cameras** | **Replace** the current camera ecosystem with a **self-hosted** recording / viewing stack (IP cameras, RTSP, NVR-style software—but OSS-first and self-hosted). |
+| **Voice & AI (local first)** | Voice commands and automations; prefer **local** processing where practical; add heavier models only when the box has headroom. |
+| **Ad blocking (LAN)** | **Pi-hole** (or similar) so the whole house can block ads and noisy telemetry at the **DNS** level. |
+| **VPN (road / café WiFi)** | Use the server (or a small companion setup) so when you’re on **untrusted public WiFi**, your traffic can go through a **trusted tunnel** to home—**private** on someone else’s network. |
+| **Security habit** | Reach things from outside via **VPN / mesh** first; **do not** expose file shares (SMB) or admin UIs raw to the open internet. |
 
 ---
 
-## 2. Hardware and expectations
+## 2. Hardware (initial and planned)
 
-| Resource | Plan |
-|----------|------|
-| **CPU** | Older i5 — fine for file serving, light transcoding, many Docker services if you don’t run everything at once. |
-| **RAM (8 GB)** | Enough to **start**; prefer **direct play** in media apps over heavy on-the-fly transcoding. Stack services gradually and set **memory limits** in Docker if you use containers. |
-| **1 TB single disk** | Good for iteration; it’s a **single point of failure**. Plan a **second drive or off-site backup** when you can. Optional: **LUKS** encryption if the machine could be lost or stolen. |
-| **Upload bandwidth** | Remote streaming and “feels like cloud” experience depend on **home upload speed** — run a speed test and keep expectations in line. |
+| Resource | Your plan | Notes |
+|----------|-------------|--------|
+| **CPU** | **Intel Core i5-3570** (Ivy Bridge) | Fine for file serving, Pi-hole, VPN, many Docker services, and **light** camera / transcoding. **No AVX2** (pre-Haswell); most homelab software still runs; a few very new AI builds may be picky—choose builds or older binaries if something refuses to install. For **NVR** (cameras), CPU load depends on **resolution, FPS, number of cameras**, and whether you use **motion-only** vs **continuous** recording. |
+| **RAM** | **16 GB DDR3** | A big step up from 8 GB: **comfortable** for Jellyfin + Nextcloud + Home Assistant + Pi-hole + VPN + a **moderate** camera stack, if you add services **gradually** and set **Docker memory limits** where it helps. |
+| **Storage (now)** | **2 × 1 TB** HDD | Use the pair intentionally: e.g. **one volume for live data** and **one for backup**, or **mirroring (RAID1 / btrfs / ZFS mirror)** for one copy of “live” data—decide with safety vs capacity in mind. **Plan backups** to something besides the only two disks in the same chassis (e.g. external drive or off-site when you can). |
+| **Storage (future)** | **SSD** (OS + fast metadata / DB) + **4 TB** HDD (bulk media and archives), optional **expansion bay** | When you migrate: **move databases and hot paths** to SSD; keep **media and camera footage** on the large HDD; document **mount points** in this repo. |
+| **Upload bandwidth** | (measure and fill in) | Remote streaming and “feels like cloud” still depend on **home upload** speed—note it in section 7. |
+| **OS** | **Linux** (no strong version preference) | **Ubuntu Server LTS** or **Debian** (stable) are the default recommendation: long support, huge docs, works well with Docker, Pi-hole, and the stacks below. Pick one and stay on it for a while. |
 
 ---
 
@@ -31,95 +36,96 @@ This document captures **goals**, **constraints**, **software principles**, and 
 
 ### 3.1 Open source and cost
 
-- **Prefer** open-source, self-hostable software so you can **read**, **change**, and **self-host** without a mandatory subscription.
-- **Prefer** tools with **no** or **optional** paid tiers for *your* use case; avoid locking core workflows to a paid cloud you don’t control.
-- **Commercial** is OK when it’s **optional** (e.g. a client app) or you explicitly accept it — document the exception here when you add it.
+- **Prefer** open-source, self-hostable software so you can **inspect**, **change**, and **own** the deployment without a forced subscription.
+- **Prefer** free tiers and **optional** paid extras only when you **choose** them (e.g. a good mobile app donation).
+- **Document** any closed-source or paid piece on purpose and why it stayed.
 
 ### 3.2 “Customize anything”
 
-Self-hosting already means **you own the config**. To keep that practical:
-
-- **Config as code** — store compose files, env **templates** (never commit secrets), reverse-proxy snippets, and scripts **in this repo** where it makes sense.
-- **One source of truth** — for each service, know: *install method* (package vs Docker), *where data lives* (host paths), *where config lives*, *how to back up* that path.
-- **Boundary layers** — reverse proxy (e.g. Caddy or Nginx), VPN (Tailscale or WireGuard), and **automation** (e.g. Home Assistant) are where you **most often** want deep customization; invest docs there.
-- **Fork-friendly** — favor stacks you can **patch**, **theme**, or **replace** (standard Linux services, well-documented APIs) over black boxes.
+- **Config as code** in this repo: compose files, **env templates** (never commit real secrets), reverse-proxy snippets, backup scripts.
+- **Per service:** install method, **data path**, **config path**, **backup** procedure, and **port** (documented in `docs/` as you go).
+- **Hub layer:** **Home Assistant** is where a lot of **voice, automations, and “house OS”** behavior will live; reverse proxy + VPN are where you customize **how** you reach things from outside.
 
 ### 3.3 Security habits
 
-- **Do not** expose **SMB/NFS** directly to the internet.
-- **Do** use a **VPN or mesh** (Tailscale is easy; WireGuard is lean) for “phone on LAN” access.
-- If anything must be **public** (rare), put it behind **HTTPS**, strong **auth**, updates, and ideally **fail2ban**; prefer VPN for admin UIs.
+- **Do not** expose **SMB** or **raw database ports** to the internet.
+- **Do** use **Tailscale** and/or **WireGuard** for “my laptop/phone = trusted path to home.”
+- For **public WiFi**: VPN **to home** (or a controlled endpoint) is the right pattern; Pi-hole is **LAN/DNS**—the **privacy-on-café-WiFi** part is the **encrypted tunnel**, not Pi-hole itself.
+
+### 3.4 Pi-hole + VPN (how they fit together)
+
+- **Pi-hole:** DNS for your LAN; point the **router** or per-device DNS at the server (or use DHCP to hand out Pi-hole as DNS). **Blocks ads/telemetry** for devices that use your network’s DNS.
+- **VPN to home (Tailscale / WireGuard):** when you’re **away**, your device gets a path to the **home LAN** (or selected subnets). You can use **Jellyfin, Nextcloud, and Home Assistant** as if you were home—**without** opening those services to the whole world.
+- **Café / airport WiFi:** run the **same VPN** so traffic between your device and home is **encrypted** on the untrusted access point. Pi-hole can **also** help when you’re **on** the home network; when remote, you’re mainly relying on the **tunnel** + app auth.
 
 ---
 
-## 4. Default stack (starting point — all adjustable)
+## 4. Default stack (candidates—swap as you learn)
 
-These are **candidates**, not a contract. Swap components as you learn.
+| Need | First choice to evaluate | Notes |
+|------|--------------------------|--------|
+| **OS** | **Ubuntu Server LTS** or **Debian** | Either is fine; LTS = fewer OS upgrades. |
+| **Media + “play anywhere”** | **Jellyfin** + official / community **clients** (TV, phone, web) | **Request** a title in the app; for **“Hey, play X”** you layer **Home Assistant** + media player integrations later. Prefer **direct play**; transcoding is heavier on the i5-3570. |
+| **Private documents, cloud feel** | **Nextcloud** (or **Files + WebDAV** only if you want lighter) | Web, sync, optional office hooks; good fit for “moderate” private storage with remote access over VPN. |
+| **Home hub + voice** | **Home Assistant** | Replaces ad-hoc voice/assistant silos; add **Piper/Whisper**-class components as needed; 16 GB helps. |
+| **IP cameras (replace old system)** | **Frigate** (often with **go2rtc**) or **Scrypted**, or lighter **MotionEye** / **Shinobi** | Frigate is popular; on older CPUs, limit **resolutions and FPS**, use **substreams**, and consider a **Coral TPU** later for object detection to spare CPU. Match cameras: **ONVIF / RTSP** preferred. **ZoneMinder** is another OSS option. |
+| **Ad blocking** | **Pi-hole** in Docker (or bare metal) | Set DNS on router or via DHCP. Document **blocklists** in repo notes if you want them repeatable. |
+| **VPN (remote + untrusted WiFi)** | **Tailscale** (easiest mesh) and/or **WireGuard** (lean, classic) | Use **one** to start; many people run **Tailscale** for “every device to home” with little port forwarding. |
+| **Reverse proxy + HTTPS** | **Caddy** or **Nginx** or **Nginx Proxy Manager** | If you only ever access via **VPN**, strict public HTTPS is less critical; still useful for **LAN** and future split-DNS. |
+| **Optional heavier local AI** | **Ollama** or small **quantized** models | 16 GB allows **smaller** models more comfortably; still be selective. |
 
-| Need | First choice to evaluate | Why it fits the principles |
-|------|--------------------------|-----------------------------|
-| OS | **Ubuntu Server LTS** or **Debian** | Stable, huge docs, easy to harden. |
-| Remote access | **Tailscale** or **WireGuard** | Encrypted tunnel; no need to open many ports. |
-| Media | **Jellyfin** | Open source, local; match client codecs for smooth **direct play**. |
-| Files / “cloud” | **Nextcloud** *or* **Samba + SFTP/SSH** | Nextcloud = richer apps; Samba+SSH = lighter if you only need files. |
-| Photo backup / gallery | **Immich** or **PhotoPrism** *or* **Syncthing** for folder sync only | Immich/PhotoPrism = full gallery; Syncthing = simpler, less RAM. |
-| Home + voice / automation | **Home Assistant** | Local, huge integration surface; add **local STT** (e.g. Whisper small) and TTS when ready. |
-| Optional heavy AI later | **Ollama** or small **quantized** models | Only after base services are stable; 8 GB is tight for big models. |
-| HTTP / TLS | **Caddy** or **Nginx** | Reverse proxy, certs if you expose selected services. |
-
-**Paid / optional** you might add on purpose: mobile apps, some upstream donations, or a VPS **only** if you outgrow “VPN into home” (document if you do).
-
----
-
-## 5. Phased roadmap
-
-### Phase 0 — Foundation (do first)
-
-1. Install Linux, apply updates, create a **non-root** admin user, enable **firewall** (allow SSH only from where you need, or VPN-only later).
-2. Decide **disk layout** and **mounts** (e.g. `/srv/data` for all persistent data).
-3. Install **Docker** (or stick to packages — your call); document the choice in this repo.
-4. Install **Tailscale** or **WireGuard**; confirm phone/laptop can reach the server on a **test port** (e.g. SSH) before layering apps.
-
-### Phase 1 — Core value
-
-1. **Jellyfin** — libraries pointing at your media folders; test **direct play** on one client.
-2. **Files** — Nextcloud *or* Samba for LAN + **SSH/SFTP** for simple remote file drop over VPN.
-3. **Backups** — at minimum: **scripted copy** to external drive or second disk; test restore.
-
-### Phase 2 — Photos and more polish
-
-1. **Immich** *or* **PhotoPrism** *or* **Syncthing** — pick one to avoid RAM starvation.
-2. Harden: **separate** DB volumes, **retention** rules, and backup includes **databases** where needed.
-
-### Phase 3 — Voice and local AI
-
-1. **Home Assistant** (if you want smart home + automation hub).
-2. Add **STT** (e.g. Whisper) and **TTS**; keep models **small** on 8 GB.
-3. Add **larger** local LLMs only with spare RAM and realistic expectations — or a **dedicated** machine later.
+**Commercial cameras** sometimes lock you in—if possible, move toward **ONVIF / RTSP** cams for Frigate/others to consume.
 
 ---
 
-## 6. What to put in *this* repository next
+## 5. Phased roadmap (suggested order)
 
-Suggestions as the build proceeds:
+### Phase 0 — Foundation
 
-- `docker-compose*.yml` (or `compose/` per stack) with **documented** volume paths.
-- `docs/` notes for **ports**, **credentials location** (not the secrets themselves), and **backup/restore** steps.
-- `env.example` — copy to `.env` on the server, **gitignore** the real `.env`.
-- Optional: `scripts/` for backup and updates.
+1. Install **Ubuntu/Debian**, updates, **non-root** admin, **firewall** (e.g. `ufw`: SSH, and later VPN/Pi-hole/DNS as needed).
+2. **Partition / mount** the two 1 TB drives: capacity vs mirror vs “data + backup”—**document** the layout here.
+3. **Docker** (or systemd + packages—your call) and a **naming plan** for volumes under e.g. `/srv/…`.
+4. **Tailscale and/or WireGuard** — confirm phone/laptop can reach the server from **another network** (or at least simulate) **before** relying on it for “café” use.
+
+### Phase 1 — Network services + media + files
+
+1. **Pi-hole** — point LAN DNS; verify blocking works.
+2. **Jellyfin** — media library, clients on phone/TV; tune for **direct play** where possible.
+3. **Nextcloud** (or your chosen doc stack) — private documents, test **web + sync** over **VPN** from outside.
+
+### Phase 2 — “House OS”: cameras and voice
+
+1. **Home Assistant** — integrate what you already have; plan **camera** and **media** entities.
+2. **NVR / camera stack** (e.g. Frigate) — add **one camera at a time**; set **retention** on disk; verify CPU with realistic streams.
+3. **Voice pipeline** in HA — start simple (dashboards, scripts); add **STT/TTS** when core is stable.
+
+### Phase 3 — Hardening and upgrades
+
+1. **Backups** — databases + config + key folders; test **restore**.
+2. **Storage migration** — when **SSD + 4 TB** land, migrate with minimal downtime; update mount docs in this repo.
+3. **Optional: Coral / more RAM / expansion bay** as load grows.
+
+---
+
+## 6. What to put in *this* repository as you build
+
+- `docker-compose*.yml` (or `compose/`) with **volume paths** explained.
+- `docs/ports.md` (or a section in `docs/`) for **used ports** and **Pi-hole** / **VPN** / **Jellyfin** notes.
+- `env.example` — copy to `.env` on the server; real `.env` stays gitignored.
+- `scripts/` for backup and updates.
+- **Camera decision log:** model, RTSP URL pattern, and **where** recordings live on disk.
 
 ---
 
 ## 7. Open decisions (fill in as you go)
 
-- [ ] **Upload speed** at home (rough Mbps up): _____________
-- [ ] **Photo priority:** full **gallery** (search, faces) vs **reliable backup** only?
-- [ ] **Voice priority:** **smart home + commands** only vs also **“chat with”** local LLM?
-- [ ] **Nextcloud** vs **Samba + SSH** for files?
-- [ ] **Immich** vs **PhotoPrism** vs **Syncthing-only** for cameras?
-
-Revisit this file when hardware or goals change (e.g. more RAM, second disk).
+- [ ] **Home upload speed** (Mbps up): _____________
+- [ ] **Two 1 TB drives:** mirror, span, or one live + one backup? _____________
+- [ ] **Camera replacement:** new **ONVIF/RTSP** cams vs making **existing** hardware work? _____________
+- [ ] **NVR choice:** Frigate vs Scrypted vs lighter tool — start with: _____________
+- [ ] **VPN:** Tailscale only, WireGuard only, or both: _____________
+- [ ] **Voice:** HA-only first vs add **Rhasspy/OVOS**-style later: _____________
 
 ---
 
-*Last updated: initial version saved from project bootstrap.*
+*Last updated: hardware and goals (i5-3570, 16 GB, 2×1 TB, media, docs, hub, cameras, voice, Pi-hole, VPN).*
