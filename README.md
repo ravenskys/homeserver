@@ -11,3 +11,10 @@ This repository holds **plans, notes, and eventually** `docker-compose` files, c
 **Planned storage upgrade:** system **SSD** + **4 TB** data disk, optional **expansion bay** for more capacity later.
 
 When the GitHub repo is private again, the same content lives in your clone; visibility does not change how you self-host.
+
+---
+
+## Next session (handoff)
+
+- **Git / GitHub:** Use **`ravenskys` only** from this point on. In **Windows Credential Manager**, remove old `github.com` entries, then `git push -u origin main` from this folder so the latest commits land on the remote. (Pushes were failing with 403 when Windows used another account—fix credentials first.)
+- **When you’re back:** Ask to **walk through this README** (and [docs/plan.md](docs/plan.md) if you want) and we’ll continue from there.
