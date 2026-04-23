@@ -4,9 +4,9 @@
 
 ## Pending
 
-- Fill remaining decisions in [build-guide.md](build-guide.md) section 7: camera path, NVR final choice, and voice scope.
-- Start execution from [build-guide.md](build-guide.md) section 5 (Phase 0 checklist).
-- Customize `compose/customer-app` stack for real app runtime (replace nginx placeholder app service with real customer app image/config).
+- On the **server** (SSH as `ravenskys`): clone this repo, clone [onthegoapp](https://github.com/ravenskys/onthegoapp) into `apps/onthegoapp`, run `scripts/bootstrap-ubuntu-24.04.sh`, then `tailscale up` and follow [build-guide.md](build-guide.md) Phase 0 → services.
+- Fill remaining decisions in [build-guide.md](build-guide.md) (customer app section + remaining open items): camera path, NVR final choice, voice scope.
+- Google router: DHCP reservation for the server; port forwards **80/443 TCP** to the server only when you go public with Caddy.
 
 ## When you resume
 
@@ -28,6 +28,10 @@
 - `compose/customer-app`: Caddy + Next.js `onthegoapp` (Supabase env; no local DB container).
 - **Ubuntu Server installed on the box**; next step on the server: `sudo bash` the bootstrap script from this repo, then `tailscale up` and service deploys.
 - Added USB install docs and bootstrap script: `docs/usb-build-pack.md` and `scripts/bootstrap-ubuntu-24.04.sh`.
+
+## Last session
+
+- End of day: working tree saved, committed, and pushed to `origin/main` (see git log on next pull).
 
 ---
 

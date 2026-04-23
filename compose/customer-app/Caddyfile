@@ -1,0 +1,15 @@
+{$DOMAIN} {
+  encode zstd gzip
+
+  # Basic hardening headers for public responses.
+  header {
+    Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+    X-Content-Type-Options "nosniff"
+    X-Frame-Options "SAMEORIGIN"
+    Referrer-Policy "strict-origin-when-cross-origin"
+  }
+
+  reverse_proxy {$APP_UPSTREAM}
+
+  tls {$ACME_EMAIL}
+}

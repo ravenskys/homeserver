@@ -4,3 +4,6 @@
 *.pem
 id_rsa
 *~
+
+# Cloned app repo (keep separate; clone on server: ravenskys/onthegoapp)
+apps/onthegoapp/

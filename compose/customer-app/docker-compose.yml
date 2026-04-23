@@ -1,0 +1,45 @@
+services:
+  caddy:
+    image: caddy:2
+    container_name: customer_caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN}
+      APP_UPSTREAM: ${APP_UPSTREAM}
+      ACME_EMAIL: ${ACME_EMAIL}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - public_proxy
+    depends_on:
+      - app
+
+  app:
+    build:
+      context: ../../apps/onthegoapp
+      dockerfile: ../../compose/customer-app/Dockerfile
+    container_name: customer_app
+    restart: unless-stopped
+    expose:
+      - "3000"
+    environment:
+      NODE_ENV: production
+      NEXT_TELEMETRY_DISABLED: 1
+      NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+    networks:
+      - public_proxy
+
+networks:
+  public_proxy:
+    name: customer_public_proxy
+
+volumes:
+  caddy_data:
+  caddy_config:
